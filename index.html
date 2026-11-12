@@ -1,0 +1,556 @@
+<title>Personal Expense Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: one centred column. Budget strip on top, then add form beside the budget on wide screens,
+   then the expense table with search, then the summary. */
+:root {
+  --bg: #f3f6f7;
+  --surface: #ffffff;
+  --fg: #14232a;
+  --muted: #5b6b73;
+  --line: #d9e2e6;
+  --accent: #0e7c72;
+  --accent-fg: #ffffff;
+  --accent-soft: #dff1ee;
+  --danger: #b42318;
+  --danger-soft: #fde8e6;
+  --warn: #9a5b00;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e171b; --surface: #16242a; --fg: #e6eef1; --muted: #93a6ae; --line: #27393f;
+    --accent: #3cc5b6; --accent-fg: #05211e; --accent-soft: #14383a;
+    --danger: #ff8d82; --danger-soft: #3a1c1a; --warn: #f0b45a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e171b; --surface: #16242a; --fg: #e6eef1; --muted: #93a6ae; --line: #27393f;
+  --accent: #3cc5b6; --accent-fg: #05211e; --accent-soft: #14383a;
+  --danger: #ff8d82; --danger-soft: #3a1c1a; --warn: #f0b45a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 15px/1.5 var(--font-body);
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1, h2 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.1rem; font-weight: 700; }
+.sub { color: var(--muted); margin: 4px 0 0; }
+header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.panel > h2 { margin-bottom: 12px; }
+.top { display: grid; grid-template-columns: 1fr 1.3fr; gap: 20px; }
+@media (max-width: 760px) { .top { grid-template-columns: 1fr; } }
+
+label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.02em; text-transform: uppercase; }
+input, select, button { font: inherit; color: inherit; }
+input[type=text], input[type=number], input[type=date], select {
+  width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); min-width: 0;
+}
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field { margin-bottom: 12px; min-width: 0; }
+@media (max-width: 480px) { .row { grid-template-columns: 1fr; } }
+.check { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+.check label { margin: 0; text-transform: none; font-size: 0.92rem; color: var(--fg); letter-spacing: 0; font-weight: 500; }
+
+button { cursor: pointer; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); padding: 9px 14px; font-weight: 600; }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button.danger { color: var(--danger); }
+button.small { padding: 4px 10px; font-size: 0.85rem; }
+button:hover { filter: brightness(0.96); }
+.msg { min-height: 1.3em; margin: 8px 0 0; font-size: 0.9rem; }
+.msg.err { color: var(--danger); }
+.msg.ok { color: var(--accent); }
+
+.budget-figs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0 10px; }
+.fig span { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+.fig strong { font-family: var(--font-display); font-size: 1.25rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fig strong.bad { color: var(--danger); }
+.meter { height: 10px; border-radius: 5px; background: var(--accent-soft); overflow: hidden; }
+.meter > i { display: block; height: 100%; background: var(--accent); width: 0; }
+.meter.over > i { background: var(--danger); }
+.meter-note { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+.budget-set { display: flex; gap: 8px; align-items: flex-end; }
+.budget-set .field { flex: 1; margin: 0; }
+
+.tools { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+.tools .field { margin: 0; flex: 1 1 150px; }
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 640px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.desc { white-space: normal; min-width: 160px; overflow-wrap: anywhere; }
+th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); background: var(--bg); }
+th.num, td.num { text-align: right; }
+tbody tr:last-child td { border-bottom: 0; }
+tfoot td { font-weight: 700; background: var(--bg); border-top: 1px solid var(--line); border-bottom: 0; }
+.tag { display: inline-block; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); font-size: 0.8rem; font-weight: 500; }
+.empty { padding: 22px; text-align: center; color: var(--muted); }
+.confirm { display: inline-flex; gap: 6px; align-items: center; }
+
+.banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  background: var(--accent-soft); border-radius: 8px; padding: 10px 14px; font-size: 0.9rem; }
+
+.sumgrid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; }
+@media (max-width: 760px) { .sumgrid { grid-template-columns: 1fr; } }
+.bars { display: flex; flex-direction: column; gap: 10px; }
+.bar { display: grid; grid-template-columns: 110px 1fr 160px; gap: 10px; align-items: center; font-size: 0.9rem; }
+.bar .track { height: 12px; background: var(--accent-soft); border-radius: 6px; overflow: hidden; }
+.bar .track i { display: block; height: 100%; background: var(--accent); }
+.bar .val { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) { .bar { grid-template-columns: 90px 1fr; } .bar .val { grid-column: 1 / -1; text-align: left; color: var(--muted); } }
+dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; }
+dt { color: var(--muted); }
+dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.highest { margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.highest small { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; font-size: 0.75rem; }
+.highest p { margin: 4px 0 0; }
+footer { color: var(--muted); font-size: 0.85rem; }
+@media (prefers-reduced-motion: no-preference) { .meter > i { transition: width .4s ease; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Personal Expense Tracker</h1>
+      <p class="sub">Add expenses, set a monthly budget and see where your money goes.</p>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden>
+    <span>These are sample entries so you can see how the tracker works.</span>
+    <button id="clearSamples" class="small">Remove samples</button>
+  </div>
+
+  <div class="top">
+    <section class="panel" aria-labelledby="bh">
+      <h2 id="bh">Monthly budget</h2>
+      <div class="budget-set">
+        <div class="field">
+          <label for="budgetInput">Budget for this month (₹)</label>
+          <input id="budgetInput" type="number" min="1" step="any" inputmode="decimal" placeholder="e.g. 5000">
+        </div>
+        <button id="budgetBtn" class="primary">Set budget</button>
+      </div>
+      <p id="budgetMsg" class="msg" role="status"></p>
+      <div class="budget-figs">
+        <div class="fig"><span>Budget</span><strong id="bLimit">–</strong></div>
+        <div class="fig"><span>Spent</span><strong id="bSpent">–</strong></div>
+        <div class="fig"><span>Remaining</span><strong id="bLeft">–</strong></div>
+      </div>
+      <div id="meter" class="meter"><i></i></div>
+      <div id="meterNote" class="meter-note"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="ah">
+      <h2 id="ah">Add expense</h2>
+      <form id="addForm" novalidate>
+        <div class="field">
+          <label for="fDesc">Description</label>
+          <input id="fDesc" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Lunch at canteen">
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="fAmount">Amount (₹)</label>
+            <input id="fAmount" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 120">
+          </div>
+          <div class="field">
+            <label for="fCategory">Category</label>
+            <select id="fCategory"></select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="fDate">Date</label>
+            <input id="fDate" type="date">
+          </div>
+          <div class="field" id="freqField" hidden>
+            <label for="fFreq">Repeats</label>
+            <select id="fFreq">
+              <option>Weekly</option><option selected>Monthly</option><option>Yearly</option>
+            </select>
+          </div>
+        </div>
+        <div class="check">
+          <input id="fRecurring" type="checkbox">
+          <label for="fRecurring">This is a recurring expense</label>
+        </div>
+        <button class="primary" type="submit">Add expense</button>
+        <p id="addMsg" class="msg" role="status"></p>
+      </form>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="th">
+    <h2 id="th">All expenses</h2>
+    <div class="tools">
+      <div class="field">
+        <label for="sId">Search by ID</label>
+        <input id="sId" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 3">
+      </div>
+      <div class="field">
+        <label for="sCat">Filter by category</label>
+        <select id="sCat"></select>
+      </div>
+      <button id="sClear">Clear search</button>
+    </div>
+    <div class="tablebox">
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Description</th><th class="num">Amount</th><th>Category</th><th>Date</th><th>Type</th><th></th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+        <tfoot id="foot"></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="sh">
+    <h2 id="sh">Summary</h2>
+    <div class="sumgrid">
+      <div>
+        <div class="bars" id="bars"></div>
+      </div>
+      <div>
+        <dl id="stats"></dl>
+        <div class="highest" id="highest"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Your expenses are stored in this browser only, so each person sees their own list. A web version of the Java console project: same classes, same features.</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- Model: mirrors the Java classes ---------- */
+
+const CATEGORIES = ["Food", "Travel", "Shopping", "Education", "Entertainment", "Others"];
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+}
+function isRealDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+function daysAgoISO(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+}
+
+// Abstract parent: id, description, amount, date, with validation (encapsulation)
+class Transaction {
+  constructor(id, description, amount, date) {
+    if (new.target === Transaction) throw new Error("Transaction is abstract.");
+    this.id = id;
+    this.setDescription(description);
+    this.setAmount(amount);
+    this.setDate(date);
+  }
+  setDescription(text) {
+    const t = String(text == null ? "" : text).trim();
+    if (!t) throw new Error("Description cannot be empty.");
+    this.description = t.replace(/\|/g, "/");
+  }
+  setAmount(value) {
+    if (!Number.isFinite(value) || value <= 0) throw new Error("Amount must be a number greater than 0.");
+    if (value > 1e9) throw new Error("Amount is too large.");
+    this.amount = value;
+  }
+  setDate(value) {
+    if (!isRealDate(value)) throw new Error("Enter a valid date.");
+    if (value > todayISO()) throw new Error("Date cannot be in the future.");
+    this.date = value;
+  }
+  belongsToCurrentMonth() { return this.date.slice(0, 7) === todayISO().slice(0, 7); }
+  getType() { throw new Error("getType() must be overridden."); }
+}
+
+class Expense extends Transaction {
+  static nextId = 1;
+  constructor(id, description, amount, category, date) {
+    super(id == null ? Expense.nextId : id, description, amount, date);
+    if (!CATEGORIES.includes(category)) throw new Error("Choose a category.");
+    this.category = category;
+    if (this.id >= Expense.nextId) Expense.nextId = this.id + 1;
+  }
+  getType() { return "One-time"; }          // overridden by RecurringExpense
+  toRecord() {
+    return { kind: "E", id: this.id, description: this.description, amount: this.amount,
+             category: this.category, date: this.date, sample: !!this.sample };
+  }
+}
+
+class RecurringExpense extends Expense {
+  constructor(id, description, amount, category, date, frequency) {
+    super(id, description, amount, category, date);
+    if (!["Weekly", "Monthly", "Yearly"].includes(frequency)) throw new Error("Choose how often it repeats.");
+    this.frequency = frequency;
+  }
+  getType() { return "Recurring-" + this.frequency; }
+  toRecord() { return Object.assign(super.toRecord(), { kind: "R", frequency: this.frequency }); }
+}
+
+class Budget {
+  constructor(limit = 0) { this.setLimit(limit); }
+  setLimit(v) {
+    if (!Number.isFinite(v) || v < 0) throw new Error("Budget cannot be negative.");
+    this.limit = v;
+  }
+  isSet() { return this.limit > 0; }
+  getRemaining(spent) { return this.limit - spent; }
+  isExceeded(spent) { return this.isSet() && spent > this.limit; }
+  getUsedPercent(spent) { return this.isSet() ? spent / this.limit * 100 : 0; }
+}
+
+// Storage: browser storage here, a text file in the Java version
+class BrowserStorage {
+  constructor(key) { this.key = key; this.memory = null; }
+  save(expenses, budget) {
+    const data = JSON.stringify({ budget: budget.limit, expenses: expenses.map(e => e.toRecord()) });
+    this.memory = data;
+    try { localStorage.setItem(this.key, data); } catch (e) { /* storage blocked: stay in memory */ }
+  }
+  load() {
+    try { const raw = localStorage.getItem(this.key); if (raw) return JSON.parse(raw); } catch (e) { /* ignore */ }
+    return this.memory ? JSON.parse(this.memory) : null;
+  }
+}
+
+class ExpenseManager {
+  constructor(storage) { this.expenses = []; this.budget = new Budget(); this.storage = storage; }
+  loadData() {
+    const data = this.storage.load();
+    if (!data) return false;
+    try {
+      this.budget.setLimit(Number(data.budget) || 0);
+      for (const r of data.expenses || []) {
+        const e = r.kind === "R"
+          ? new RecurringExpense(r.id, r.description, r.amount, r.category, r.date, r.frequency)
+          : new Expense(r.id, r.description, r.amount, r.category, r.date);
+        e.sample = !!r.sample;
+        this.expenses.push(e);
+      }
+    } catch (err) { /* a damaged record stops loading; keep what we have */ }
+    return true;
+  }
+  saveData() { this.storage.save(this.expenses, this.budget); }
+  add(expense) { this.expenses.push(expense); this.saveData(); return expense; }
+  searchById(id) { return this.expenses.find(e => e.id === id) || null; }
+  searchByCategory(cat) { return this.expenses.filter(e => e.category === cat); }
+  delete(id) {
+    const i = this.expenses.findIndex(e => e.id === id);
+    if (i < 0) throw new Error("No expense found with ID " + id + ".");
+    this.expenses.splice(i, 1);
+    this.saveData();
+  }
+  getTotal(category) {
+    return this.expenses.filter(e => !category || e.category === category).reduce((s, e) => s + e.amount, 0);
+  }
+  getCurrentMonthTotal() {
+    return this.expenses.filter(e => e.belongsToCurrentMonth()).reduce((s, e) => s + e.amount, 0);
+  }
+  getHighest() {
+    return this.expenses.reduce((h, e) => (!h || e.amount > h.amount ? e : h), null);
+  }
+}
+
+/* ---------- UI ---------- */
+
+const manager = new ExpenseManager(new BrowserStorage("personal-expense-tracker-v1"));
+const $ = id => document.getElementById(id);
+const money = n => "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+let pendingDelete = null;
+
+function addSamples() {
+  const samples = [
+    [new Expense(null, "Lunch at canteen", 120, "Food", daysAgoISO(0))],
+    [new Expense(null, "Bus pass", 1500, "Travel", daysAgoISO(2))],
+    [new Expense(null, "Data Structures textbook", 650, "Education", daysAgoISO(3))],
+    [new RecurringExpense(null, "Netflix subscription", 499, "Entertainment", daysAgoISO(4), "Monthly")],
+    [new Expense(null, "Headphones", 2200, "Shopping", daysAgoISO(35))]
+  ];
+  for (const [e] of samples) { e.sample = true; manager.expenses.push(e); }
+  manager.budget.setLimit(5000);
+  manager.saveData();
+}
+
+function fillSelects() {
+  $("fCategory").innerHTML = CATEGORIES.map(c => `<option>${c}</option>`).join("");
+  $("sCat").innerHTML = `<option value="">All categories</option>` + CATEGORIES.map(c => `<option>${c}</option>`).join("");
+  $("fDate").value = todayISO();
+  $("fDate").max = todayISO();
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function currentList() {
+  const idText = $("sId").value.trim();
+  const cat = $("sCat").value;
+  let list = manager.expenses.slice().sort((a, b) => a.id - b.id);
+  let label = "";
+  if (idText !== "") {
+    const hit = manager.searchById(Number(idText));
+    list = hit ? [hit] : [];
+    label = "ID " + idText;
+  }
+  if (cat) { list = list.filter(e => e.category === cat); label += (label ? " in " : "") + cat; }
+  return { list, label };
+}
+
+function renderTable() {
+  const { list, label } = currentList();
+  const rows = $("rows");
+  if (list.length === 0) {
+    rows.innerHTML = `<tr><td colspan="7" class="empty">${
+      label ? "No expenses match " + esc(label) + "." : "No expenses yet. Add your first one above."}</td></tr>`;
+    $("foot").innerHTML = "";
+    return;
+  }
+  rows.innerHTML = list.map(e => {
+    const action = pendingDelete === e.id
+      ? `<span class="confirm">Delete? <button class="small danger" data-yes="${e.id}">Yes</button><button class="small" data-no="1">No</button></span>`
+      : `<button class="small danger" data-del="${e.id}" aria-label="Delete expense ${e.id}">Delete</button>`;
+    return `<tr><td>${e.id}</td><td class="desc">${esc(e.description)}</td><td class="num">${money(e.amount)}</td>` +
+      `<td><span class="tag">${e.category}</span></td><td>${e.date}</td><td>${e.getType()}</td><td>${action}</td></tr>`;
+  }).join("");
+  const total = list.reduce((s, e) => s + e.amount, 0);
+  $("foot").innerHTML = `<tr><td colspan="2">${list.length} record${list.length === 1 ? "" : "s"}</td><td class="num">${money(total)}</td><td colspan="4"></td></tr>`;
+}
+
+function renderBudget() {
+  const b = manager.budget, spent = manager.getCurrentMonthTotal();
+  $("bSpent").textContent = money(spent);
+  const left = $("bLeft"), meter = $("meter");
+  if (!b.isSet()) {
+    $("bLimit").textContent = "Not set";
+    left.textContent = "–"; left.className = "";
+    meter.className = "meter"; meter.firstElementChild.style.width = "0%";
+    $("meterNote").textContent = "Set a monthly budget to track what is left.";
+    return;
+  }
+  $("bLimit").textContent = money(b.limit);
+  if (b.isExceeded(spent)) {
+    left.textContent = "Over by " + money(spent - b.limit); left.className = "bad";
+    meter.className = "meter over";
+  } else {
+    left.textContent = money(b.getRemaining(spent)); left.className = "";
+    meter.className = "meter";
+  }
+  meter.firstElementChild.style.width = Math.min(100, b.getUsedPercent(spent)) + "%";
+  const month = new Date().toLocaleString("en-IN", { month: "long", year: "numeric" });
+  $("meterNote").textContent = b.getUsedPercent(spent).toFixed(1) + "% of the budget used in " + month + ".";
+}
+
+function renderSummary() {
+  const total = manager.getTotal(), n = manager.expenses.length;
+  if (n === 0) {
+    $("bars").innerHTML = `<div class="empty">Add an expense to see the summary.</div>`;
+    $("stats").innerHTML = ""; $("highest").innerHTML = ""; $("highest").hidden = true;
+    return;
+  }
+  $("bars").innerHTML = CATEGORIES.map(c => {
+    const t = manager.getTotal(c), pct = t / total * 100;
+    return `<div class="bar"><span>${c}</span><span class="track"><i style="width:${pct.toFixed(1)}%"></i></span>` +
+      `<span class="val">${money(t)} · ${pct.toFixed(1)}%</span></div>`;
+  }).join("");
+  $("stats").innerHTML =
+    `<dt>Expenses recorded</dt><dd>${n}</dd><dt>Total spent</dt><dd>${money(total)}</dd>` +
+    `<dt>Average per expense</dt><dd>${money(total / n)}</dd><dt>Spent this month</dt><dd>${money(manager.getCurrentMonthTotal())}</dd>`;
+  const h = manager.getHighest();
+  $("highest").hidden = false;
+  $("highest").innerHTML = `<small>Highest single expense</small><p><strong>${esc(h.description)}</strong> · ${money(h.amount)}<br>` +
+    `${h.category} · ${h.date} · ID ${h.id}</p>`;
+}
+
+function render() {
+  $("banner").hidden = !manager.expenses.some(e => e.sample);
+  renderBudget(); renderTable(); renderSummary();
+}
+
+function say(id, text, ok) {
+  const el = $(id); el.textContent = text; el.className = "msg " + (ok ? "ok" : "err");
+}
+
+/* ---------- Events ---------- */
+
+$("fRecurring").addEventListener("change", e => { $("freqField").hidden = !e.target.checked; });
+
+$("addForm").addEventListener("submit", ev => {
+  ev.preventDefault();
+  try {
+    const desc = $("fDesc").value, amount = parseFloat($("fAmount").value.replace(",", "."));
+    const cat = $("fCategory").value, date = $("fDate").value || todayISO();
+    const e = $("fRecurring").checked
+      ? new RecurringExpense(null, desc, amount, cat, date, $("fFreq").value)
+      : new Expense(null, desc, amount, cat, date);
+    manager.add(e);
+    say("addMsg", "Added with ID " + e.id + ".", true);
+    if (manager.budget.isExceeded(manager.getCurrentMonthTotal())) {
+      say("addMsg", "Added with ID " + e.id + ". You are over your monthly budget.", false);
+    }
+    $("fDesc").value = ""; $("fAmount").value = ""; $("fRecurring").checked = false; $("freqField").hidden = true;
+    $("fDesc").focus();
+    render();
+  } catch (err) { say("addMsg", err.message, false); }
+});
+
+$("budgetBtn").addEventListener("click", () => {
+  try {
+    const v = parseFloat($("budgetInput").value.replace(",", "."));
+    if (!Number.isFinite(v) || v <= 0) throw new Error("Enter a budget greater than 0.");
+    if (v > 1e9) throw new Error("Budget is too large.");
+    manager.budget.setLimit(v); manager.saveData();
+    say("budgetMsg", "Monthly budget set to " + money(v) + ".", true);
+    $("budgetInput").value = "";
+    render();
+  } catch (err) { say("budgetMsg", err.message, false); }
+});
+
+$("rows").addEventListener("click", ev => {
+  const t = ev.target.closest("button"); if (!t) return;
+  if (t.dataset.del) { pendingDelete = Number(t.dataset.del); }
+  else if (t.dataset.yes) {
+    try { manager.delete(Number(t.dataset.yes)); } catch (err) { say("addMsg", err.message, false); }
+    pendingDelete = null;
+  } else { pendingDelete = null; }
+  render();
+});
+
+["sId", "sCat"].forEach(id => $(id).addEventListener("input", () => { pendingDelete = null; renderTable(); }));
+$("sClear").addEventListener("click", () => { $("sId").value = ""; $("sCat").value = ""; renderTable(); });
+
+$("clearSamples").addEventListener("click", () => {
+  manager.expenses = manager.expenses.filter(e => !e.sample);
+  if (manager.expenses.length === 0) manager.budget.setLimit(0);
+  manager.saveData(); render();
+});
+
+/* ---------- Start ---------- */
+fillSelects();
+if (!manager.loadData()) addSamples();
+render();
+</script>
